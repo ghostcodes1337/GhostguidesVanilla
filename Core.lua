@@ -11,6 +11,9 @@ local _ADDON_NAME = "GhostguidesVanilla"
 local _VERSION = GetAddOnMetadata(_ADDON_NAME, "Version")
 local _G = _G or getfenv(0)
 
+_G.BINDING_HEADER_GHOSTGUIDES_VANILLA = "GhostGuides Vanilla"
+_G.BINDING_NAME_GLV_HOLD_DISABLE_AUTOQUEST = "Hold to disable Auto Accept / Turn-In"
+
 local GLV = LibStub:NewLibrary(_ADDON_NAME, 1)
 if not GLV then return end
 
@@ -46,6 +49,18 @@ local function GLV_HandleScaleSlash(msg)
     if GLV_ApplyUIScale then
         GLV_ApplyUIScale(scale, true)
         DEFAULT_CHAT_FRAME:AddMessage(string.format("|cFF6B8BD4[GhostGuidesVanilla]|r UI scale set to %.2f", scale))
+    end
+end
+
+function GLV_HoldDisableAutoQuestDialogs()
+    if GLV and GLV.AutoAccept and GLV.AutoAccept.SetHoldDisabled then
+        GLV.AutoAccept:SetHoldDisabled(true)
+    end
+end
+
+function GLV_ReleaseDisableAutoQuestDialogs()
+    if GLV and GLV.AutoAccept and GLV.AutoAccept.SetHoldDisabled then
+        GLV.AutoAccept:SetHoldDisabled(false)
     end
 end
 

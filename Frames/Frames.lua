@@ -424,6 +424,84 @@ local function GLV_SaveFramePosition()
     end
 end
 
+local function GLV_RestoreStepTrackerPosition()
+    if not (GLV and GLV.Settings and GLV_StepTracker) then
+        return false
+    end
+
+    local posX = GLV.Settings:GetOption({"UI", "StepTrackerPositionX"})
+    local posY = GLV.Settings:GetOption({"UI", "StepTrackerPositionY"})
+    local screenWidth = GetScreenWidth()
+    local screenHeight = GetScreenHeight()
+
+    if posX and posY then
+        GLV_StepTracker:ClearAllPoints()
+
+        if posY < 0 then
+            -- Backward compatibility for older saved TOPLEFT-based positions.
+            GLV_StepTracker:SetPoint("TOPLEFT", UIParent, "TOPLEFT", posX, posY)
+        else
+            GLV_StepTracker:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", posX, posY)
+        end
+
+        local left = GLV_StepTracker:GetLeft()
+        local right = GLV_StepTracker:GetRight()
+        local bottom = GLV_StepTracker:GetBottom()
+        local top = GLV_StepTracker:GetTop()
+
+        if left and right and bottom and top then
+            if right >= 0 and left <= screenWidth and top >= 0 and bottom <= screenHeight then
+                return true
+            end
+        end
+
+        GLV_StepTracker:ClearAllPoints()
+    end
+
+    return false
+end
+
+local function GLV_SaveStepTrackerPosition()
+    if not (GLV and GLV.Settings and GLV_StepTracker) then
+        return
+    end
+
+    if not GLV.Settings:GetOption({"UI", "StepTrackerDetached"}) then
+        return
+    end
+
+    local left = GLV_StepTracker:GetLeft()
+    local bottom = GLV_StepTracker:GetBottom()
+
+    if left and bottom then
+        GLV.Settings:SetOption(left, {"UI", "StepTrackerPositionX"})
+        GLV.Settings:SetOption(bottom, {"UI", "StepTrackerPositionY"})
+    end
+end
+
+local function GLV_IsStepTrackerDetached()
+    return GLV and GLV.Settings and GLV.Settings:GetOption({"UI", "StepTrackerDetached"}) == true
+end
+
+function GLV_UpdateStepTrackerDetachState()
+    if not GLV_StepTracker then
+        return
+    end
+
+    local detached = GLV_IsStepTrackerDetached()
+    GLV_StepTracker:SetMovable(detached)
+
+    if detached then
+        GLV_StepTracker:EnableMouse(true)
+        GLV_StepTracker:RegisterForDrag("LeftButton")
+    else
+        GLV_StepTracker:RegisterForDrag("")
+        if GLV_Main and GLV_PositionStepTracker then
+            GLV_PositionStepTracker()
+        end
+    end
+end
+
 function GLV_MainLock_OnLoad()
     this:RegisterEvent("ADDON_LOADED")
 
@@ -442,6 +520,12 @@ function GLV_MainLock_OnLoad()
 
             -- restore saved position
             GLV_RestoreFramePosition()
+            GLV_UpdateStepTrackerDetachState()
+            if GLV_PositionStepTracker then
+                GLV_PositionStepTracker()
+            end
+
+            GLV_ApplyFrameStrata(GLV.Settings:GetOption({"UI", "FrameStrata"}) or "DIALOG")
 
             if locked then
                 GLV_MainLock:SetNormalTexture("Interface\\AddOns\\GhostguidesVanilla\\Textures\\closed_lock")
@@ -749,6 +833,22 @@ function GLV_ApplyFrameStrata(strata)
     local mainFrame = getglobal("GLV_Main")
     if mainFrame then
         mainFrame:SetFrameStrata(strata)
+    end
+
+    if GLV_StepTracker then
+        GLV_StepTracker:SetFrameStrata(strata)
+    end
+
+    if GLV_OngoingTracker then
+        GLV_OngoingTracker:SetFrameStrata(strata)
+    end
+
+    if GLV_OngoingWindows then
+        for _, frame in ipairs(GLV_OngoingWindows) do
+            if frame and frame.SetFrameStrata then
+                frame:SetFrameStrata(strata)
+            end
+        end
     end
 end
 
@@ -1072,6 +1172,27 @@ function GLV_OnMinimapButtonCheckboxClick(checkbox)
     end
 end
 
+function GLV_InitStepTrackerDetachedCheckbox(checkbox)
+    local value = GLV.Settings:GetOption({"UI", "StepTrackerDetached"})
+    if value == nil then value = false end
+    checkbox:SetChecked(value)
+end
+
+function GLV_OnStepTrackerDetachedCheckboxClick(checkbox)
+    local checked = checkbox:GetChecked()
+    local isChecked = (checked == 1 or checked == true)
+    GLV.Settings:SetOption(isChecked, {"UI", "StepTrackerDetached"})
+
+    if isChecked then
+        GLV_UpdateStepTrackerDetachState()
+        if GLV_PositionStepTracker then
+            GLV_PositionStepTracker()
+        end
+    else
+        GLV_UpdateStepTrackerDetachState()
+    end
+end
+
 -- ============================================================================
 -- ACTIVE STEP TRACKER WINDOW
 -- ============================================================================
@@ -1084,16 +1205,19 @@ GLV_StepTracker:SetHeight(60)
 GLV_StepTracker:SetPoint("CENTER", UIParent, "CENTER", 0, 200)
 
 GLV_StepTracker:SetFrameStrata("DIALOG")
-GLV_StepTracker:SetMovable(true)
+GLV_StepTracker:SetMovable(false)
 GLV_StepTracker:EnableMouse(true)
-GLV_StepTracker:RegisterForDrag("LeftButton")
+GLV_StepTracker:RegisterForDrag("")
 
 GLV_StepTracker:SetScript("OnDragStart", function()
-    this:StartMoving()
+    if GLV_IsStepTrackerDetached() then
+        this:StartMoving()
+    end
 end)
 
 GLV_StepTracker:SetScript("OnDragStop", function()
     this:StopMovingOrSizing()
+    GLV_SaveStepTrackerPosition()
 end)
 
 GLV_StepTracker:SetBackdrop({
@@ -1177,6 +1301,13 @@ function GLV_UpdateStepTracker(text)
         text = text or "No active step"
         text = string.gsub(text, "\\n", "\n")
         text = string.gsub(text, "\\\\", "\n")
+        text = string.gsub(text, "^\n+", "")
+        text = string.gsub(text, "\n+$", "")
+        text = string.gsub(text, "^[ \t\r]+", "")
+        if text == "" then
+            text = "No active step"
+        end
+
         GLV_StepTracker.text:SetText(text)
 
         -- ensure wrapping width is set
@@ -1189,7 +1320,7 @@ function GLV_UpdateStepTracker(text)
         end
 
         -- resize frame automatically
-        local totalHeight = 40 + textHeight + 15
+        local totalHeight = 52 + textHeight
 
         if totalHeight < 60 then
             totalHeight = 60
@@ -1217,10 +1348,18 @@ end
 
 function GLV_PositionStepTracker()
     if not GLV_StepTracker then return end
+
+    if GLV_IsStepTrackerDetached() then
+        if GLV_RestoreStepTrackerPosition() then
+            GLV_StepTracker:Show()
+            return
+        end
+    end
+
     if not GLV_Main then return end
 
     GLV_StepTracker:ClearAllPoints()
-    GLV_StepTracker:SetPoint("BOTTOM", GLV_Main, "TOP", 0, 10)
+    GLV_StepTracker:SetPoint("BOTTOMLEFT", GLV_Main, "TOPLEFT", 0, 10)
     GLV_StepTracker:Show()
 end
 
@@ -1308,7 +1447,7 @@ function GLV_UpdateOngoingTracker()
             frame:SetBackdropColor(0.05, 0.06, 0.16, 1)
             GLV_EnsureSolidBackground(frame, 0.05, 0.06, 0.16, 1)
             GLV_ApplyGoldenBorder(frame)
-            frame:SetFrameStrata("DIALOG")
+            frame:SetFrameStrata((GLV and GLV.Settings and GLV.Settings:GetOption({"UI", "FrameStrata"})) or "DIALOG")
 
             -- position stack
             if previousFrame then

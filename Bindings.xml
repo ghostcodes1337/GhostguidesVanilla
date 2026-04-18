@@ -1,0 +1,8 @@
+<Bindings>
+    <Binding name="GLV_HOLD_DISABLE_AUTOQUEST" header="GHOSTGUIDES_VANILLA">
+        GLV_HoldDisableAutoQuestDialogs();
+    </Binding>
+    <Binding name="GLV_HOLD_DISABLE_AUTOQUEST" runOnUp="true">
+        GLV_ReleaseDisableAutoQuestDialogs();
+    </Binding>
+</Bindings>

@@ -22,6 +22,7 @@ local defaults = {
             Layer = "HIGH",
             GuideTextScale = 1,
             NavigationScale = 1,
+            StepTrackerDetached = false,
         },
         CharInfo = {
             Realm = "Unknown",
@@ -48,6 +49,7 @@ local defaults = {
         Automation = {
             AutoAcceptQuests = false,
             AutoTurninQuests = false,
+            AutoQuestDialogs = false,
             AutoTakeFlight = false,
         },
         Talents = {

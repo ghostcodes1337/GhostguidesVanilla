@@ -199,6 +199,9 @@ end
 -- Function factory to create the dropdown callback function
 local function createDropdownCallback(group, guideId, guideData, displayName, dropdown)
     return function()
+        if GLV.ResetGuideProgress then
+            GLV:ResetGuideProgress(guideId)
+        end
         GLV:LoadGuide(group, guideId)
         UIDropDownMenu_SetSelectedValue(dropdown, guideId)
         UIDropDownMenu_SetText(displayName, dropdown)
@@ -242,6 +245,27 @@ local function getGuideDisplayName(guideData)
         return guideData.name .. " (" .. guideData.minLevel .. "-" .. guideData.maxLevel .. ")"
     end
     return guideData.name
+end
+
+local function parseNextGuideReference(nextGuideContent)
+    if not nextGuideContent or nextGuideContent == "" then
+        return nil
+    end
+
+    local nextMinLevel, nextMaxLevel, guideName = string.match(nextGuideContent, "(%d+)-(%d+)%s+(.+)")
+    if not guideName then
+        guideName = nextGuideContent
+    end
+
+    local expectedGuideId = string.gsub(guideName, "%s+", "_")
+    if nextMinLevel and nextMinLevel ~= "" then
+        expectedGuideId = expectedGuideId .. "_" .. nextMinLevel
+    end
+    if nextMaxLevel and nextMaxLevel ~= "" then
+        expectedGuideId = expectedGuideId .. "_" .. nextMaxLevel
+    end
+
+    return expectedGuideId, guideName
 end
 
 -- Group guides into level range buckets (1-10, 11-20, etc.)
@@ -396,6 +420,116 @@ end
 
 --[[ GUIDE LOADING FUNCTIONS ]]--
 
+function GLV:ResetGuideProgress(guideId)
+    if not guideId then
+        return
+    end
+
+    self.Settings:SetOption({}, {"Guide", "Guides", guideId, "StepState"})
+    self.Settings:SetOption({}, {"Guide", "Guides", guideId, "StepQuestState"})
+    self.Settings:SetOption({}, {"Guide", "Guides", guideId, "ActiveOngoingSteps"})
+    self.Settings:SetOption(nil, {"Guide", "Guides", guideId, "VisitedTARs"})
+    self.Settings:SetOption(0, {"Guide", "Guides", guideId, "CurrentStep"})
+
+    if self.CurrentGuide and self.CurrentGuide.id == guideId and self.OngoingStepsManager then
+        self.OngoingStepsManager:Clear()
+    end
+end
+
+function GLV:ResolveNextGuideReference(nextGuideContent, preferredGroup)
+    local expectedGuideId = parseNextGuideReference(nextGuideContent)
+    if not expectedGuideId then
+        return nil
+    end
+
+    if preferredGroup and self.loadedGuides[preferredGroup] and self.loadedGuides[preferredGroup][expectedGuideId] then
+        return preferredGroup, expectedGuideId, self.loadedGuides[preferredGroup][expectedGuideId]
+    end
+
+    for groupName, groupGuides in pairs(self.loadedGuides) do
+        if groupGuides and groupGuides[expectedGuideId] then
+            return groupName, expectedGuideId, groupGuides[expectedGuideId]
+        end
+    end
+
+    return nil
+end
+
+function GLV:FindNextGuideInPack(packName, currentGuideId)
+    if not packName or not currentGuideId then
+        return nil
+    end
+
+    local guides = self.loadedGuides[packName]
+    if not guides then
+        return nil
+    end
+
+    local playerFaction = self.Settings:GetOption({"CharInfo", "Faction"})
+    local playerRace = self.Settings:GetOption({"CharInfo", "Race"})
+    local sortedGuides = filterGuides(guides, playerFaction, playerRace)
+
+    for index, guideEntry in ipairs(sortedGuides) do
+        if guideEntry.id == currentGuideId then
+            local nextEntry = sortedGuides[index + 1]
+            if nextEntry then
+                return packName, nextEntry.id, nextEntry.data
+            end
+            break
+        end
+    end
+
+    return nil
+end
+
+function GLV:FindLogicalNextGuide(currentGroup, currentGuideId, guide)
+    local activePack = self:GetActiveGuidePack()
+    local preferredGroup = currentGroup or activePack
+
+    if guide and guide.next then
+        local nxGroup, nxGuideId, nxGuideData = self:ResolveNextGuideReference(guide.next, preferredGroup)
+        if nxGroup and nxGuideId and nxGuideData then
+            return nxGroup, nxGuideId, nxGuideData
+        end
+    end
+
+    if preferredGroup then
+        local packGroup, packGuideId, packGuideData = self:FindNextGuideInPack(preferredGroup, currentGuideId)
+        if packGroup and packGuideId and packGuideData then
+            return packGroup, packGuideId, packGuideData
+        end
+    end
+
+    return nil
+end
+
+function GLV:AutoLoadNextGuide(currentGroup, currentGuideId, guide)
+    if self.isAutoLoadingNextGuide then
+        return false
+    end
+
+    local nextGroup, nextGuideId, nextGuideData = self:FindLogicalNextGuide(currentGroup, currentGuideId, guide)
+    if not nextGroup or not nextGuideId or nextGuideId == currentGuideId then
+        return false
+    end
+
+    self.isAutoLoadingNextGuide = true
+    local ok = pcall(function()
+        self:LoadGuide(nextGroup, nextGuideId)
+    end)
+    self.isAutoLoadingNextGuide = false
+
+    if not ok then
+        return false
+    end
+
+    if DEFAULT_CHAT_FRAME and nextGuideData and nextGuideData.name then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF6B8BD4[GhostGuidesVanilla]|r Loaded next guide: |cFFFFFF00" .. nextGuideData.name .. "|r")
+    end
+
+    return true
+end
+
 -- Load and display a specific guide
 function GLV:LoadGuide(group, guideId)
     if GLV.GuideNavigation then
@@ -423,6 +557,7 @@ function GLV:LoadGuide(group, guideId)
     end
     
     GLV.Settings:SetOption(guideId, {"Guide", "CurrentGuide"})
+    GLV.Settings:SetOption(group, {"Guide", "CurrentGroup"})
 
     -- Load ongoing steps state for this guide
     if GLV.OngoingStepsManager then

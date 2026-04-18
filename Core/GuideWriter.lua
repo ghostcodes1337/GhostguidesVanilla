@@ -813,13 +813,23 @@ function GLV:CreateGuideSteps(scrollChild, guide, guideId, callback)
 
     -- Find first unchecked step (the "real" position in the guide)
     local firstUncheckedStep = 0
+    local hasCompletableSteps = false
     for i2 = 1, totalSteps do
         if displaySteps[i2] and displaySteps[i2].hasCheckbox then
+            hasCompletableSteps = true
             local orig = displayIndexToOriginalIndex[i2]
             if orig and not stepState[orig] then
                 firstUncheckedStep = i2
                 break
             end
+        end
+    end
+
+    if hasCompletableSteps and firstUncheckedStep == 0 then
+        local currentGroup = GLV.Settings:GetOption({"Guide", "CurrentGroup"}) or guide.group
+        if GLV.AutoLoadNextGuide and GLV:AutoLoadNextGuide(currentGroup, currentGuideId, guide) then
+            if callback then callback() end
+            return
         end
     end
 

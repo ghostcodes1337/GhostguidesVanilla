@@ -552,6 +552,26 @@
                                             </OnClick>
                                         </Scripts>
                                     </CheckButton>
+
+                                    <CheckButton name="GLV_SettingsGuidesPageAutoQuestDialogs" inherits="OptionsCheckButtonTemplate">
+                                        <Anchors>
+                                            <Anchor point="TOPLEFT" RelativeTo="GLV_SettingsGuidesPageAutoTakeFlight" RelativePoint="BOTTOMLEFT">
+                                                <Offset x="0" y="-2"/>
+                                            </Anchor>
+                                        </Anchors>
+                                        <Scripts>
+                                            <OnLoad>
+                                                getglobal(this:GetName().."Text"):SetText("Auto Accept / Turn-In (Current Step Only)");
+                                                GLV_InitCheckboxFont(this);
+                                            </OnLoad>
+                                            <OnShow>
+                                                GLV_InitAutomationCheckbox(this, {"Automation", "AutoQuestDialogs"});
+                                            </OnShow>
+                                            <OnClick>
+                                                GLV_OnAutomationCheckboxClick(this, {"Automation", "AutoQuestDialogs"});
+                                            </OnClick>
+                                        </Scripts>
+                                    </CheckButton>
                                 </Frames>
                             </Frame>
 
@@ -795,6 +815,26 @@
                                             </OnShow>
                                             <OnClick>
                                                 GLV_OnHidePfQuestCheckboxClick(this);
+                                            </OnClick>
+                                        </Scripts>
+                                    </CheckButton>
+
+                                    <CheckButton name="GLV_SettingsDisplayPageStepTrackerDetached" inherits="OptionsCheckButtonTemplate">
+                                        <Anchors>
+                                            <Anchor point="TOPLEFT" RelativeTo="GLV_SettingsDisplayPageHidePfQuest" RelativePoint="BOTTOMLEFT">
+                                                <Offset x="0" y="-2"/>
+                                            </Anchor>
+                                        </Anchors>
+                                        <Scripts>
+                                            <OnLoad>
+                                                getglobal(this:GetName().."Text"):SetText("Allow moving CurrentStep window");
+                                                GLV_InitCheckboxFont(this);
+                                            </OnLoad>
+                                            <OnShow>
+                                                GLV_InitStepTrackerDetachedCheckbox(this);
+                                            </OnShow>
+                                            <OnClick>
+                                                GLV_OnStepTrackerDetachedCheckboxClick(this);
                                             </OnClick>
                                         </Scripts>
                                     </CheckButton>

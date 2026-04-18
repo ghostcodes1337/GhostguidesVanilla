@@ -12,6 +12,18 @@ local GLV = LibStub("GhostguidesVanilla")
 local AutoAccept = {}
 GLV.AutoAccept = AutoAccept
 
+function AutoAccept:SetHoldDisabled(disabled)
+    self.holdDisabled = disabled == true
+end
+
+function AutoAccept:IsEnabled()
+    if self.holdDisabled then
+        return false
+    end
+
+    return GLV.Settings and GLV.Settings:GetOption({"Automation", "AutoQuestDialogs"}) == true
+end
+
 function AutoAccept:Init()
     if not GLV.Ace then
         return
@@ -81,7 +93,7 @@ function AutoAccept:GetCurrentStepQuestId(questTitle, actionType)
 end
 
 function AutoAccept:OnQuestDetail()
-    if self.acceptInProgress or not GLV.QuestTracker then
+    if not self:IsEnabled() or self.acceptInProgress or not GLV.QuestTracker then
         return
     end
 
@@ -111,7 +123,7 @@ function AutoAccept:OnQuestDetail()
 end
 
 function AutoAccept:OnQuestProgress()
-    if self.turninInProgress or not GLV.QuestTracker then
+    if not self:IsEnabled() or self.turninInProgress or not GLV.QuestTracker then
         return
     end
 
@@ -119,11 +131,16 @@ function AutoAccept:OnQuestProgress()
         return
     end
 
+    local questTitle = GetTitleText() or ""
+    local questId = self:GetCurrentStepQuestId(questTitle, "TURNIN")
+    if not questId then
+        return
+    end
+
     self.turninInProgress = true
 
-    local questTitle = GetTitleText() or ""
     if GLV.Debug then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[AutoTurnin]|r Completing quest: " .. questTitle)
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[AutoTurnin]|r Completing current-step quest: " .. questTitle)
     end
 
     CompleteQuest()
@@ -141,21 +158,7 @@ function AutoAccept:ResolveQuestIdForTurnin(questTitle)
     end
 
     local questId = self:GetCurrentStepQuestId(questTitle, "TURNIN")
-    if questId then
-        return tonumber(questId)
-    end
-
-    local acceptedId = GLV.QuestTracker:FindAcceptedIdByTitle(questTitle)
-    if acceptedId then
-        return tonumber(acceptedId)
-    end
-
-    local dbId = GLV:GetQuestIDByName(questTitle)
-    if dbId then
-        return tonumber(dbId)
-    end
-
-    return nil
+    return questId and tonumber(questId) or nil
 end
 
 function AutoAccept:ScheduleDialogContinue(delay)
@@ -190,71 +193,132 @@ function AutoAccept:GetCompletionFlagFromValues(values, startIndex, count)
 end
 
 function AutoAccept:TrySelectGreetingQuest()
+    if not self:IsEnabled() then
+        return false
+    end
+
     if not GetNumActiveQuests or not SelectActiveQuest or not GetActiveTitle then
         return false
     end
 
     local numActive = GetNumActiveQuests()
-    if not numActive or numActive <= 0 then
+    if numActive and numActive > 0 then
+        for i = 1, numActive do
+            local titleData = { GetActiveTitle(i) }
+            local title = titleData[1]
+            local isComplete = self:GetCompletionFlagFromValues(titleData, 1, table.getn(titleData))
+            local questId = self:GetCurrentStepQuestId(title, "TURNIN")
+
+            if isComplete and questId then
+                if GLV.Debug then
+                    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[AutoTurnin]|r Opening greeting quest #" .. tostring(i) .. " for auto turn-in")
+                end
+                SelectActiveQuest(i)
+                return true
+            end
+        end
+    end
+
+    if not GetNumAvailableQuests or not SelectAvailableQuest or not GetAvailableTitle then
         return false
     end
 
-    local fallbackIndex = 1
+    local numAvailable = GetNumAvailableQuests()
+    if not numAvailable or numAvailable <= 0 then
+        return false
+    end
 
-    for i = 1, numActive do
-        local titleData = { GetActiveTitle(i) }
-        local isComplete = self:GetCompletionFlagFromValues(titleData, 1, table.getn(titleData))
+    for i = 1, numAvailable do
+        local titleData = { GetAvailableTitle(i) }
+        local title = titleData[1]
+        local questId = self:GetCurrentStepQuestId(title, "ACCEPT")
 
-        if isComplete then
+        if questId then
             if GLV.Debug then
-                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[AutoTurnin]|r Opening greeting quest #" .. tostring(i) .. " for auto turn-in")
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[AutoAccept]|r Opening greeting quest #" .. tostring(i) .. " for auto-accept")
             end
-            SelectActiveQuest(i)
+            SelectAvailableQuest(i)
             return true
         end
     end
 
-    if GLV.Debug then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00[AutoTurnin]|r No explicit completed flag found, opening first active greeting quest")
-    end
-
-    SelectActiveQuest(fallbackIndex)
-    return true
+    return false
 end
 
 function AutoAccept:TrySelectGossipQuest()
+    if not self:IsEnabled() then
+        return false
+    end
+
     if not GetNumGossipActiveQuests or not SelectGossipActiveQuest or not GetGossipActiveQuests then
         return false
     end
 
     local numActive = GetNumGossipActiveQuests()
-    if not numActive or numActive <= 0 then
+    if numActive and numActive > 0 then
+        local gossipData = { GetGossipActiveQuests() }
+        local total = table.getn(gossipData)
+        local stride = 5
+
+        if numActive > 0 and total >= (numActive * 4) then
+            stride = math.floor(total / numActive)
+            if stride < 4 then
+                stride = 4
+            end
+            if stride > 5 then
+                stride = 5
+            end
+        end
+
+        for i = 1, numActive do
+            local offset = ((i - 1) * stride) + 1
+            local isComplete = self:GetCompletionFlagFromValues(gossipData, offset, stride)
+            local title = gossipData[offset]
+            local questId = self:GetCurrentStepQuestId(title, "TURNIN")
+
+            if isComplete and questId then
+                if GLV.Debug then
+                    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[AutoTurnin]|r Opening gossip quest #" .. tostring(i) .. " for auto turn-in")
+                end
+                SelectGossipActiveQuest(i)
+                return true
+            end
+        end
+    end
+
+    if not GetNumGossipAvailableQuests or not SelectGossipAvailableQuest or not GetGossipAvailableQuests then
         return false
     end
 
-    local gossipData = { GetGossipActiveQuests() }
-    local total = table.getn(gossipData)
-    local stride = 5
+    local numAvailable = GetNumGossipAvailableQuests()
+    if not numAvailable or numAvailable <= 0 then
+        return false
+    end
 
-    if numActive > 0 and total >= (numActive * 4) then
-        stride = math.floor(total / numActive)
-        if stride < 4 then
-            stride = 4
-        end
-        if stride > 5 then
+    local availableData = { GetGossipAvailableQuests() }
+    local total = table.getn(availableData)
+    local stride = 6
+
+    if numAvailable > 0 and total >= (numAvailable * 5) then
+        stride = math.floor(total / numAvailable)
+        if stride < 5 then
             stride = 5
+        end
+        if stride > 6 then
+            stride = 6
         end
     end
 
-    for i = 1, numActive do
+    for i = 1, numAvailable do
         local offset = ((i - 1) * stride) + 1
-        local isComplete = self:GetCompletionFlagFromValues(gossipData, offset, stride)
+        local title = availableData[offset]
+        local questId = self:GetCurrentStepQuestId(title, "ACCEPT")
 
-        if isComplete then
+        if questId then
             if GLV.Debug then
-                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[AutoTurnin]|r Opening gossip quest #" .. tostring(i) .. " for auto turn-in")
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[AutoAccept]|r Opening gossip quest #" .. tostring(i) .. " for auto-accept")
             end
-            SelectGossipActiveQuest(i)
+            SelectGossipAvailableQuest(i)
             return true
         end
     end
@@ -263,6 +327,10 @@ function AutoAccept:TrySelectGossipQuest()
 end
 
 function AutoAccept:ContinueDialogTurnins()
+    if not self:IsEnabled() then
+        return
+    end
+
     if self.gossipSelectionInProgress then
         return
     end
@@ -291,7 +359,7 @@ function AutoAccept:ContinueDialogTurnins()
 end
 
 function AutoAccept:OnQuestComplete()
-    if not GLV.QuestTracker then
+    if not self:IsEnabled() or not GLV.QuestTracker then
         return
     end
 
@@ -301,49 +369,36 @@ function AutoAccept:OnQuestComplete()
         return
     end
 
-    local numChoices = GetNumQuestChoices and GetNumQuestChoices() or 0
     local questId = self:ResolveQuestIdForTurnin(questTitle)
-
-    if questId then
-        local store = GLV.QuestTracker.store or GLV.Settings:GetOption({"QuestTracker"}) or {}
-        if not store.Completed then
-            store.Completed = {}
-        end
-        store.Completed[questId] = { title = questTitle, timestamp = time() }
-        if store.Accepted and store.Accepted[questId] then
-            store.Accepted[questId] = nil
-        end
-        GLV.Settings:SetOption(store, {"QuestTracker"})
-
-        GLV.QuestTracker:HandleQuestAction(questId, questTitle, "TURNIN")
+    if not questId then
+        self.turninInProgress = false
+        return
     end
 
     if GLV.Debug then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[AutoTurnin]|r Turning in quest: " .. questTitle .. " (" .. tostring(questId) .. ")")
-    end
-
-    if numChoices and numChoices > 0 then
-        GetQuestReward(1)
-    else
-        GetQuestReward()
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00[AutoTurnin]|r Reward screen opened for current-step quest: " .. questTitle .. " (" .. tostring(questId) .. ")")
     end
 
     GLV.Ace:ScheduleEvent("GLV_AutoTurninCompleteUnlock", function()
         self.turninInProgress = false
     end, 0.2)
-
-    self:ScheduleDialogContinue(0.4)
 end
 
 function AutoAccept:OnGossipShow()
-    self:ScheduleDialogContinue(0.05)
+    if self:IsEnabled() then
+        self:ScheduleDialogContinue(0.05)
+    end
 end
 
 function AutoAccept:OnQuestGreeting()
-    self:ScheduleDialogContinue(0.05)
+    if self:IsEnabled() then
+        self:ScheduleDialogContinue(0.05)
+    end
 end
 
 function AutoAccept:OnQuestFinished()
     self.turninInProgress = false
-    self:ScheduleDialogContinue(0.1)
+    if self:IsEnabled() then
+        self:ScheduleDialogContinue(0.1)
+    end
 end
