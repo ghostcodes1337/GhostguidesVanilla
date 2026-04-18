@@ -11,14 +11,15 @@
 
 GhostGuides Vanilla is a complete overhaul based on the original **GuidelimeVanilla** project by JeromeM.
 
-Designed for **World of Warcraft Classic Vanilla 1.12.1**, this addon includes:
+Designed for **World of Warcraft Vanilla 1.12.1**, this addon includes:
 
 - Full **1–60 Horde leveling guides** by GhostGuides
 - **Sage 1–60 Alliance leveling guides**
 - Smart **step tracking**
-- Separate **active step tracker**
+- Separate **Current Step tracker**
 - Dedicated **ongoing objective windows**
 - Automatic **quest progress tracking**
+- Automatic **quest accept / quest turn-in**
 - Automatic **navigation arrow / waypoint system**
 - Talent recommendations
 - Improved modernized UI
@@ -86,23 +87,69 @@ After installation restart the game or reload the UI.
 
 ## Features
 
-### Active Step Tracker
-Displays the current active step in a separate floating tracker window.
+### Current Step Tracker
+Displays the currently active guide step in a dedicated floating tracker window above the main guide.
+
+The Current Step tracker supports:
+
+- automatic live updates
+- multi-line step text
+- quest objective progress directly under `Complete ...` lines
+- completed quest markers such as `DONE` for finished objectives or already completed quests
 
 ### Ongoing Objectives
 Objectives marked with `[O]` remain visible in their own dedicated windows until completed.
 
+This is useful for:
+
+- long-running collection quests
+- optional kill objectives
+- travel and side objectives that should stay visible while progressing other steps
+
 ### Automatic Quest Progress
-Quest progress updates automatically in real time.
+Quest progress updates automatically in real time in:
+
+- the main guide
+- the Current Step tracker
+- the navigation block under the arrow
 
 Example:
 
 ```text
-Collect Harpy Wings (3/8)
+- Mottled Boar slain: 3/10
 ```
+
+### Auto Accept / Auto Turn-In
+The addon supports automatic quest dialog handling for Vanilla-safe quest APIs.
+
+Included behavior:
+
+- auto-accept for quests matching the current guide step
+- automatic quest completion when a quest is ready to hand in
+- automatic gossip / greeting quest selection for completed quests
+- automatic dialog continuation to turn in available quests faster
 
 ### Navigation Arrow
 Automatic waypoint arrow that guides you to the next objective.
+
+Navigation improvements include:
+
+- better multi-objective quest handling
+- improved detection of the next unfinished quest action inside the same step
+- more reliable arrow refresh after reloads and quest progress changes
+- bolder navigation text for the active quest / objective under the arrow
+- white quest progress text for improved readability
+
+### Guide Window & UI Improvements
+The interface has been modernized while keeping Vanilla compatibility.
+
+Recent UI improvements include:
+
+- solid, non-transparent tracker and guide backgrounds
+- gold-themed frame borders
+- improved dropdown positioning when opening upward or downward
+- updated main frame layering so bottom-right control buttons stay clickable immediately after login
+- support for `\n` inside guide text so custom guide lines can render as proper line breaks
 
 ### Persistent Progress
 The following are saved automatically:
@@ -112,14 +159,13 @@ The following are saved automatically:
 - current progress
 - tracker window positions
 - settings
+- quest completion state used for guide synchronization
 
 ---
 
 ## Supported Version
 
 - WoW Vanilla 1.12.1
-- Turtle WoW compatible
-- Vanilla private server compatible
 
 ---
 
@@ -127,10 +173,10 @@ The following are saved automatically:
 
 This addon is currently in **active beta development**.
 
-Upcoming improvements may include:
+Current development focus includes:
 
-- UI polishing
-- additional guide improvements
-- better quest progress detection
-- additional tracker improvements
+- further UI polishing
+- more guide logic improvements
+- additional navigation refinements
+- continued quest tracking improvements
 - performance optimizations
