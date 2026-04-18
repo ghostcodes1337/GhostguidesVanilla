@@ -53,7 +53,7 @@ The folder structure **must remain exactly like this**.
 Interface/
 └── AddOns/
     ├── GhostGuidesVanilla
-    ├── GhostGuides
+    ├── GuidelimeVanilla_Ghost
     └── GuidelimeVanilla_Sage
 ```
 
