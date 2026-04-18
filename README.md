@@ -4,68 +4,107 @@
   <img src="./AddonPreview.png" alt="GhostGuides Vanilla Preview" width="1000">
 </p>
 
-> ⚠️ **Beta Build**
+> Beta Build
 >
-> GhostGuides Vanilla is currently in **beta** and still under active development.  
-> The addon is already fully usable, but some UI elements, tracking systems and guide logic are still receiving additional polishing and fine tuning.
+> GhostGuides Vanilla is currently in active development.  
+> The addon is fully usable, but guide logic, automation, and UI behavior are still being refined.
 
-GhostGuides Vanilla is a complete overhaul based on the original **GuidelimeVanilla** project by JeromeM.
+GhostGuides Vanilla is a heavily expanded overhaul based on the original **GuidelimeVanilla** project by JeromeM.
 
-Designed for **World of Warcraft Classic Vanilla 1.12.1**, this addon includes:
+Built for **World of Warcraft Vanilla 1.12.1**, it combines leveling guides, smart quest handling, a modernized tracker UI, waypoint navigation, and talent support in one addon.
 
-- Full **1–60 Horde leveling guides** by GhostGuides
-- **Sage 1–60 Alliance leveling guides**
-- Smart **step tracking**
-- Separate **active step tracker**
-- Dedicated **ongoing objective windows**
-- Automatic **quest progress tracking**
-- Automatic **quest accept / turn-in support**
-- Automatic **navigation arrow / waypoint system**
-- Talent recommendations
-- Improved modernized UI
-- Persistent saved guide progress
+## Features
 
----
+### Guide Support
 
-## Credits
+- Full **1-60 Horde leveling guides** by GhostGuides
+- **Sage Alliance leveling guides**
+- Automatic loading of the **next logical guide** when the current guide is completed
+- Manual guide re-selection now **resets that guide's progress** and starts it fresh
+- Persistent guide progress and per-guide saved state
 
-This project is based on:
+### Current Step Tracker
 
-- **GuidelimeVanilla** by JeromeM  
-  https://github.com/JeromeM/GuidelimeVanilla
+- Separate floating **CurrentStep** window
+- Automatically resizes to the actual text height
+- Resizes upward so it does not push down into the main guide frame
+- By default it stays **docked directly above** the main guide window
+- Optional setting to **detach and move** the CurrentStep window freely
+- Detached position is saved between reloads and relogs
+- Supports `\n` inside guide text to force a new line in the same tracker window
 
-Integrated guide packs:
+### Quest Tracking
 
-- **GhostGuides 1–60 Horde leveling guides**
-- **Sage 1–60 Alliance leveling guides**
+- Real-time quest objective tracking inside the CurrentStep window
+- If a step contains multiple `QC` / `Complete Quest` lines, progress is shown **under each matching quest**
+- Finished complete quests can show a green **DONE** marker in the CurrentStep display
+- Ongoing objective tracking for relevant steps
 
-Special thanks to the original authors and the Vanilla addon community.
+### Quest Automation
 
----
+- **Auto Accept** for the current guide step only
+- **Auto Turn-In** for the current guide step only
+- The addon will not accept unrelated quests
+- The addon will not turn in unrelated quests
+- The addon will **not choose quest rewards automatically**
+- Auto dialog handling can click through quest gossip/dialog when it matches the current step
+- Option in settings to disable auto accept / turn-in entirely
+- Optional hold keybind to temporarily disable auto accept / turn-in while the key is pressed
 
-## Required Folder Structure
+### Navigation
 
-The folder structure **must remain exactly like this**.
+- Automatic waypoint arrow / navigation system
+- Arrow tracking prefers the still-incomplete objective when multiple quest-complete targets exist in the same current step
+- Arrow can be reset back to the screen center with a command
+- Navigation arrow scale is separate from the general addon UI scale
+- Current quest text under the arrow uses bold styling and white quest progress text
 
-`GhostGuidesVanilla` must be placed on the **same directory level** as both guide folders.
+### UI / Visuals
+
+- Solid non-transparent tracker backgrounds
+- Golden border styling on the main UI and dropdown
+- Dropdown opens above or below based on available space
+- Improved anchoring when the guide dropdown opens upward
+- Guide window layer / frame strata setting
+- Addon-wide UI scale command
+
+### Talents
+
+- Talent recommendation support
+- Toast / popup support
+- Saved toast position
+
+## Commands
+
+### Slash Commands
+
+- `/glvscale <value>`
+- `/glvscale reset`
+- `/glvuiscale <value>`
+- `/glvuiscale reset`
+- `/glvarrowreset`
+- `/glv arrowreset`
+- `/glv show`
+
+Examples:
 
 ```text
-Interface/
-└── AddOns/
-    ├── GhostGuidesVanilla
-    ├── GhostGuides
-    └── GuidelimeVanilla_Sage
+/glvscale 1.15
+/glvscale reset
+/glvarrowreset
 ```
 
-This structure is required so the addon can correctly detect and load all available guide packs.
+## Key Bindings
 
-If folders are renamed, nested or moved, guide loading may fail.
+GhostGuides Vanilla adds a key binding for:
 
----
+- **Hold to disable Auto Accept / Turn-In**
+
+This can be configured in the game's key binding menu and will suppress quest dialog automation only while the key is held down.
 
 ## Installation
 
-Copy all folders into:
+Copy all addon folders into:
 
 ```text
 World of Warcraft/
@@ -76,137 +115,58 @@ World of Warcraft/
 Required folders:
 
 ```text
-GhostGuidesVanilla
+GhostguidesVanilla
 GuidelimeVanilla_Ghost
 GuidelimeVanilla_Sage
 ```
 
 After installation restart the game or reload the UI.
 
----
+## Required Folder Structure
 
-## Features
+The folder structure should remain like this:
 
-### Active Step Tracker
-Displays the current active step in a separate floating tracker window.
+```text
+Interface/
+└── AddOns/
+    ├── GhostguidesVanilla
+    ├── GuidelimeVanilla_Ghost
+    └── GuidelimeVanilla_Sage
+```
 
-### Ongoing Objectives
-Objectives marked with `[O]` remain visible in their own dedicated windows until completed.
+`GhostguidesVanilla` must be on the same directory level as the guide packs so they can be detected and loaded correctly.
 
-### Automatic Quest Progress
-Quest progress updates automatically in real time in the guide, tracker windows, and navigation area.
+## Guide Notes
+
+For linking a guide to the next one, use the **guide name** from the `[N ...]` tag, not the file name.
 
 Example:
 
-```text
-Collect Harpy Wings (3/8)
+```lua
+[N 1-6 Orc/Troll Leveling]
+[NX 6-12 Orc/Troll Leveling]
 ```
 
-### Current Step Improvements
+And the next guide:
 
-- quest progress is shown directly under `Complete ...` lines
-- multiple `QuestComplete` lines can each show their own matching progress
-- finished quests can be marked with `DONE`
-- already completed quests can still display as finished even when no longer in the quest log
-
-### Auto Accept / Turn-In
-
-- auto-accepts quests for the exact current step
-- auto-completes and turns in available quests
-- can automatically click through greeting / gossip quest dialogs
-
-### Navigation Arrow
-Automatic waypoint arrow that guides you to the next objective.
-
-Recent navigation improvements include:
-
-- improved target resolution for multi-objective steps
-- better refresh after reloads and quest progress changes
-- stronger text styling under the arrow for readability
-- white quest progress text under the arrow
-- arrow reset support if it goes off-screen
-
-### UI Improvements
-
-- solid non-transparent tracker and guide backgrounds
-- gold-themed frame borders
-- improved dropdown anchoring
-- safer layering for bottom-right control buttons
-- support for `\n` inside guide text for explicit line breaks
-- addon-wide UI scaling via command
-
-### Persistent Progress
-The following are saved automatically:
-
-- selected guide
-- checked steps
-- current progress
-- tracker window positions
-- settings
-
----
-
-## Commands
-
-### Main Commands
-
-- `/glv show`  
-  Shows the guide window.
-
-- `/glv hide`  
-  Hides the guide window.
-
-- `/glv settings`  
-  Opens the settings window.
-
-- `/glv editor`  
-  Toggles the integrated guide editor.
-
-### UI Scale Commands
-
-- `/glvscale`  
-  Shows the current addon UI scale.
-
-- `/glvscale 1.15`  
-  Sets the addon UI scale to a custom value.
-
-- `/glvscale 0.90`  
-  Shrinks the addon UI.
-
-- `/glvscale reset`  
-  Resets the addon UI scale back to `1.00`.
-
-- `/glvuiscale 1.10`  
-  Alias for the same scale command.
-
-Notes:
-
-- UI scale affects the main guide UI and tracker windows.
-- The navigation arrow is intentionally **not** scaled together with the main addon UI.
-
-### Arrow Reset Commands
-
-- `/glvarrowreset`
-- `/glv arrowreset`
-
-These commands reset the navigation arrow position back near the center of the screen.
-
----
+```lua
+[N 6-12 Orc/Troll Leveling]
+```
 
 ## Supported Version
 
 - WoW Vanilla 1.12.1
 
----
+## Credits
 
-## Current Status
+This project is based on:
 
-This addon is currently in **active beta development**.
+- **GuidelimeVanilla** by JeromeM  
+  https://github.com/JeromeM/GuidelimeVanilla
 
-Upcoming improvements may include:
+Integrated guide packs:
 
-- UI polishing
-- additional guide improvements
-- better quest progress detection
-- additional tracker improvements
-- performance optimizations
+- **GhostGuides 1-60 Horde leveling guides**
+- **Sage Alliance guides**
+
+Special thanks to the original authors and the Vanilla addon community.
