@@ -221,6 +221,27 @@ function GuideNavigation:ApplyScale(scale)
     end
 end
 
+function GuideNavigation:ResetPosition()
+    if not navigationFrame then
+        self:CreateNavigationFrame()
+    end
+
+    if navigationFrame then
+        navigationFrame:ClearAllPoints()
+        navigationFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 100)
+
+        if GLV and GLV.Settings then
+            local left = navigationFrame:GetLeft()
+            local top = navigationFrame:GetTop()
+            if left and top then
+                GLV.Settings:SetOption({left, top}, {"Navigation", "FramePosition"})
+            else
+                GLV.Settings:SetOption(nil, {"Navigation", "FramePosition"})
+            end
+        end
+    end
+end
+
 --[[ COORDINATE AND CALCULATION FUNCTIONS ]]--
 
 -- Gets the current player position using Astrolabe

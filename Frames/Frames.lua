@@ -13,6 +13,7 @@ local GLV = LibStub("GhostguidesVanilla")
 local displaySettingsChanged = false
 -- Guard flag: true while sliders are being initialized (prevents false "changed" marks)
 local displaySettingsInitializing = false
+local glvPendingUIScale = 1
 
 -- Mark display settings as changed (ignored during slider init)
 function GLV_MarkDisplaySettingsChanged()
@@ -98,6 +99,10 @@ local function GLV_ApplySolidDropdownBackground(frame)
 
     GLV_EnsureSolidBackground(frame, 0.10, 0.12, 0.22, 1)
     GLV_ApplyGoldenBorder(frame)
+
+    if frame.SetScale then
+        frame:SetScale(glvPendingUIScale or 1)
+    end
 
     if frame.SetAlpha then
         frame:SetAlpha(1)
@@ -239,6 +244,70 @@ function GLV_ShowGuideFrame()
     end
 end
 
+local function GLV_GetClampedUIScale(scale)
+    scale = tonumber(scale) or 1
+    if scale < 0.75 then scale = 0.75 end
+    if scale > 1.75 then scale = 1.75 end
+    return scale
+end
+
+function GLV_ApplyUIScale(scale, persist)
+    scale = GLV_GetClampedUIScale(scale)
+    glvPendingUIScale = scale
+
+    local savedMainLeft = GLV_Main and GLV_Main.GetLeft and GLV_Main:GetLeft() or nil
+    local savedMainTop = GLV_Main and GLV_Main.GetTop and GLV_Main:GetTop() or nil
+
+    local targets = {
+        GLV_Main,
+        GLV_Settings,
+        GLV_StepTracker,
+        GLV_OngoingTracker,
+        GLV_TalentToast,
+        GLV_TalentPopup,
+    }
+
+    for _, frame in ipairs(targets) do
+        if frame and frame.SetScale then
+            frame:SetScale(scale)
+        end
+    end
+
+    if GLV_OngoingWindows then
+        for _, frame in ipairs(GLV_OngoingWindows) do
+            if frame and frame.SetScale then
+                frame:SetScale(scale)
+            end
+        end
+    end
+
+    if GLV_Main and savedMainLeft and savedMainTop then
+        local uiScale = (UIParent and UIParent.GetScale and UIParent:GetScale()) or 1
+        if uiScale == 0 then
+            uiScale = 1
+        end
+
+        local screenHeight = GetScreenHeight() / uiScale
+        local relativeY = savedMainTop - screenHeight
+
+        GLV_Main:ClearAllPoints()
+        GLV_Main:SetPoint("TOPLEFT", UIParent, "TOPLEFT", savedMainLeft, relativeY)
+
+        if GLV and GLV.Settings then
+            GLV.Settings:SetOption(savedMainLeft, {"UI", "PositionX"})
+            GLV.Settings:SetOption(relativeY, {"UI", "PositionY"})
+        end
+    end
+
+    if persist and GLV and GLV.Settings then
+        GLV.Settings:SetOption(scale, {"UI", "Scale"})
+    end
+
+    if GLV_PositionStepTracker then
+        GLV_PositionStepTracker()
+    end
+end
+
 -- Helper to set checkbox text to compact 11px font
 function GLV_InitCheckboxFont(checkbox)
     local text = getglobal(checkbox:GetName().."Text")
@@ -366,6 +435,8 @@ function GLV_MainLock_OnLoad()
                 GLV_EnsureSolidBackground(GLV_Main, 0.05, 0.06, 0.16, 1)
                 GLV_ApplyGoldenBorder(GLV_Main)
             end
+
+            GLV_ApplyUIScale((GLV and GLV.Settings and GLV.Settings:GetOption({"UI", "Scale"})) or 1, false)
 
             local locked = GLV and GLV.Settings and GLV.Settings:GetOption({"UI", "Locked"}) or false
 

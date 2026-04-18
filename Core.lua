@@ -22,6 +22,33 @@ local addon = AceLibrary("AceAddon-2.0"):new(
 )
 GLV.Addon = addon
 
+local function GLV_HandleScaleSlash(msg)
+    local input = msg and string.gsub(msg, "^%s+", "") or ""
+    input = string.gsub(input, "%s+$", "")
+
+    if input == "" then
+        local current = (GLV.Settings and GLV.Settings:GetOption({"UI", "Scale"})) or 1
+        DEFAULT_CHAT_FRAME:AddMessage(string.format("|cFF6B8BD4[GhostGuidesVanilla]|r Current UI scale: %.2f", current))
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF6B8BD4[GhostGuidesVanilla]|r Use |cFFFFFF00/glvscale 1.15|r or |cFFFFFF00/glvscale reset|r")
+        return
+    end
+
+    if string.lower(input) == "reset" then
+        input = "1"
+    end
+
+    local scale = tonumber(input)
+    if not scale then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF4444[GhostGuidesVanilla]|r Invalid scale value. Example: |cFFFFFF00/glvscale 1.15|r")
+        return
+    end
+
+    if GLV_ApplyUIScale then
+        GLV_ApplyUIScale(scale, true)
+        DEFAULT_CHAT_FRAME:AddMessage(string.format("|cFF6B8BD4[GhostGuidesVanilla]|r UI scale set to %.2f", scale))
+    end
+end
+
 
 --[[ DEFAULT ACE2 EVENTS ]]--
 
@@ -72,6 +99,17 @@ function addon:OnInitialize()
                 desc = "Open settings window",
                 func = function() GLV_ToggleSettings() end,
             },
+            arrowreset = {
+                type = "execute",
+                name = "ArrowReset",
+                desc = "Reset the navigation arrow position",
+                func = function()
+                    if GLV.GuideNavigation and GLV.GuideNavigation.ResetPosition then
+                        GLV.GuideNavigation:ResetPosition()
+                        DEFAULT_CHAT_FRAME:AddMessage("|cFF6B8BD4[GhostGuidesVanilla]|r Arrow position reset.")
+                    end
+                end,
+            },
             editor = {
                 type = "execute",
                 name = "Editor",
@@ -84,6 +122,20 @@ function addon:OnInitialize()
             },
         },
     })
+
+    SLASH_GLVSCALE1 = "/glvscale"
+    SLASH_GLVSCALE2 = "/glvuiscale"
+    SlashCmdList["GLVSCALE"] = function(msg)
+        GLV_HandleScaleSlash(msg)
+    end
+
+    SLASH_GLVARROWRESET1 = "/glvarrowreset"
+    SlashCmdList["GLVARROWRESET"] = function()
+        if GLV.GuideNavigation and GLV.GuideNavigation.ResetPosition then
+            GLV.GuideNavigation:ResetPosition()
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF6B8BD4[GhostGuidesVanilla]|r Arrow position reset.")
+        end
+    end
 
 end
 
