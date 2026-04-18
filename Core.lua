@@ -114,6 +114,9 @@ function addon:OnEnable()
 
     -- Add Events Loading
     GLV.QuestTracker:Init()
+    if GLV.AutoAccept then
+        GLV.AutoAccept:Init()
+    end
     GLV.CharacterTracker:Init()
     GLV.TaxiTracker:Init()
     GLV.GossipTracker:Init()

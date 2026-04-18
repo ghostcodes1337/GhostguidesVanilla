@@ -26,6 +26,7 @@ Core\GuideLibrary.lua
 Core\GuideWriter.lua
 
 Core\Events\Quests.lua
+Core\Events\AutoAccept.lua
 Core\Events\Character.lua
 Core\Events\Taxi.lua
 Core\Events\Gossip.lua

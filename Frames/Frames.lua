@@ -6,6 +6,7 @@ multiple Frames with the same dimensions but not the same content.
 When we click on a menu "button", it will hide all the Frames except
 the one linked to this "button".
 ]]--
+local _G = _G or getfenv(0)
 local GLV = LibStub("GhostguidesVanilla")
 
 -- Track if display settings have changed (requires reload)
@@ -59,6 +60,101 @@ StaticPopupDialogs["GLV_RELOAD_UI"] = {
 
 -- URL copy popup (created on first use)
 local urlPopupFrame = nil
+
+local function GLV_EnsureSolidBackground(frame, r, g, b, a)
+    if not frame then return end
+
+    if not frame.glvSolidBackground then
+        local bg = frame:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints(frame)
+        frame.glvSolidBackground = bg
+    end
+
+    frame.glvSolidBackground:SetTexture(r, g, b, a or 1)
+end
+
+local function GLV_ApplyGoldenBorder(frame)
+    if not frame or not frame.SetBackdropBorderColor then return end
+    frame:SetBackdropBorderColor(0.92, 0.76, 0.28, 1)
+end
+
+local function GLV_ApplySolidDropdownBackground(frame)
+    if not frame then return end
+
+    if frame.SetBackdrop then
+        frame:SetBackdrop({
+            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true,
+            tileSize = 32,
+            edgeSize = 16,
+            insets = { left = 5, right = 5, top = 5, bottom = 5 }
+        })
+    end
+
+    if frame.SetBackdropColor then
+        frame:SetBackdropColor(0.10, 0.12, 0.22, 1)
+    end
+
+    GLV_EnsureSolidBackground(frame, 0.10, 0.12, 0.22, 1)
+    GLV_ApplyGoldenBorder(frame)
+
+    if frame.SetAlpha then
+        frame:SetAlpha(1)
+    end
+end
+
+local function GLV_ReanchorGuideDropdown(frame)
+    if not frame or not frame.IsVisible or not frame:IsVisible() then return end
+    if not GLV_Main then return end
+    if UIDROPDOWNMENU_OPEN_MENU ~= GLV_MainDropdown then return end
+
+    local uiHeight = (UIParent and UIParent.GetHeight and UIParent:GetHeight()) or GetScreenHeight()
+    local frameHeight = frame:GetHeight() or 0
+    local mainTop = GLV_Main:GetTop() or 0
+    local mainBottom = GLV_Main:GetBottom() or 0
+    local spaceBelow = mainBottom
+    local spaceAbove = uiHeight - mainTop
+
+    frame:ClearAllPoints()
+
+    if spaceBelow >= frameHeight or spaceBelow >= spaceAbove then
+        frame:SetPoint("TOPLEFT", GLV_Main, "BOTTOMLEFT", 16, -2)
+    else
+        frame:SetPoint("BOTTOMLEFT", GLV_Main, "TOPLEFT", 16, -32)
+    end
+
+    if frame.SetClampedToScreen then
+        frame:SetClampedToScreen(true)
+    end
+end
+
+local function GLV_HookDropdownFrame(frame)
+    if not frame or frame.glvDropdownHooked then return end
+
+    local originalOnShow = frame:GetScript("OnShow")
+    frame:SetScript("OnShow", function()
+        if originalOnShow then
+            originalOnShow()
+        end
+
+        GLV_ApplySolidDropdownBackground(this)
+        GLV_ReanchorGuideDropdown(this)
+    end)
+
+    local originalOnUpdate = frame:GetScript("OnUpdate")
+    frame:SetScript("OnUpdate", function()
+        if originalOnUpdate then
+            originalOnUpdate()
+        end
+
+        if UIDROPDOWNMENU_OPEN_MENU == GLV_MainDropdown then
+            GLV_ApplySolidDropdownBackground(this)
+        end
+    end)
+
+    frame.glvDropdownHooked = true
+end
 
 function GLV:ShowURLPopup(url)
     if not url then return end
@@ -266,7 +362,9 @@ function GLV_MainLock_OnLoad()
         if event == "ADDON_LOADED" and arg1 == "GhostguidesVanilla" then
             -- apply background color
             if GLV_Main and GLV_Main.SetBackdropColor then
-                GLV_Main:SetBackdropColor(0.05, 0.06, 0.16, 0.92)
+                GLV_Main:SetBackdropColor(0.05, 0.06, 0.16, 1)
+                GLV_EnsureSolidBackground(GLV_Main, 0.05, 0.06, 0.16, 1)
+                GLV_ApplyGoldenBorder(GLV_Main)
             end
 
             local locked = GLV and GLV.Settings and GLV.Settings:GetOption({"UI", "Locked"}) or false
@@ -936,7 +1034,9 @@ GLV_StepTracker:SetBackdrop({
     insets = { left = 4, right = 4, top = 4, bottom = 4 }
 })
 
-GLV_StepTracker:SetBackdropColor(0.05, 0.06, 0.16, 0.92)
+GLV_StepTracker:SetBackdropColor(0.05, 0.06, 0.16, 1)
+GLV_EnsureSolidBackground(GLV_StepTracker, 0.05, 0.06, 0.16, 1)
+GLV_ApplyGoldenBorder(GLV_StepTracker)
 GLV_StepTracker:Show()
 DEFAULT_CHAT_FRAME:AddMessage("Tracker loaded")
 
@@ -1003,7 +1103,10 @@ function GLV_UpdateStepTracker(text)
 
     -- update text + auto resize
     if GLV_StepTracker and GLV_StepTracker.text then
-        GLV_StepTracker.text:SetText(text or "No active step")
+        text = text or "No active step"
+        text = string.gsub(text, "\\n", "\n")
+        text = string.gsub(text, "\\\\", "\n")
+        GLV_StepTracker.text:SetText(text)
 
         -- ensure wrapping width is set
         GLV_StepTracker.text:SetWidth(235)
@@ -1070,7 +1173,9 @@ GLV_OngoingTracker:SetBackdrop({
     insets = { left = 4, right = 4, top = 4, bottom = 4 }
 })
 
-GLV_OngoingTracker:SetBackdropColor(0.05, 0.06, 0.16, 0.92)
+GLV_OngoingTracker:SetBackdropColor(0.05, 0.06, 0.16, 1)
+GLV_EnsureSolidBackground(GLV_OngoingTracker, 0.05, 0.06, 0.16, 1)
+GLV_ApplyGoldenBorder(GLV_OngoingTracker)
 
 GLV_OngoingTracker.title = GLV_OngoingTracker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 GLV_OngoingTracker.title:SetPoint("TOPLEFT", 12, -8)
@@ -1129,7 +1234,9 @@ function GLV_UpdateOngoingTracker()
                 insets = { left = 4, right = 4, top = 4, bottom = 4 }
             })
 
-            frame:SetBackdropColor(0.05, 0.06, 0.16, 0.92)
+            frame:SetBackdropColor(0.05, 0.06, 0.16, 1)
+            GLV_EnsureSolidBackground(frame, 0.05, 0.06, 0.16, 1)
+            GLV_ApplyGoldenBorder(frame)
             frame:SetFrameStrata("DIALOG")
 
             -- position stack
@@ -1355,17 +1462,20 @@ function GLV_MinimapButton_OnMouseUp()
 end
 
 function GLV_FixDropdownAppearance()
-    if DropDownList1 and DropDownList1.SetBackdropColor then
-        DropDownList1:SetBackdropColor(0.10, 0.12, 0.22, 1)
+    if DropDownList1 then
+        GLV_HookDropdownFrame(DropDownList1)
+        GLV_ApplySolidDropdownBackground(DropDownList1)
     end
 
-    if DropDownList2 and DropDownList2.SetBackdropColor then
-        DropDownList2:SetBackdropColor(0.10, 0.12, 0.22, 1)
+    if DropDownList2 then
+        GLV_HookDropdownFrame(DropDownList2)
+        GLV_ApplySolidDropdownBackground(DropDownList2)
     end
 end
 
 function GLV_FixDropdownColor()
-    if DropDownList1 and DropDownList1.SetBackdropColor then
-        DropDownList1:SetBackdropColor(0.10, 0.12, 0.22, 1)
+    if DropDownList1 then
+        GLV_HookDropdownFrame(DropDownList1)
+        GLV_ApplySolidDropdownBackground(DropDownList1)
     end
 end

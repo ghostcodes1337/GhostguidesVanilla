@@ -141,12 +141,14 @@ function GuideNavigation:CreateNavigationFrame()
 
     navigationFrame.questName = navigationFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     navigationFrame.questName:SetPoint("TOP", navigationFrame, "BOTTOM", 0, -8)
+    navigationFrame.questName:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
     navigationFrame.questName:SetTextColor(1, 0.8, 0)
     navigationFrame.questName:SetText("")
     navigationFrame.questName:SetJustifyH("CENTER")
 
     navigationFrame.objective = navigationFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     navigationFrame.objective:SetPoint("TOP", navigationFrame.questName, "BOTTOM", 0, -5)
+    navigationFrame.objective:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
     navigationFrame.objective:SetTextColor(1, 1, 1)
     navigationFrame.objective:SetText("")
     navigationFrame.objective:SetJustifyH("CENTER")
@@ -502,8 +504,7 @@ function GuideNavigation:UpdateNavigation()
                 if objectives and table.getn(objectives) > 0 then
                     local progressLines = {}
                     for _, obj in ipairs(objectives) do
-                        local color = obj.completed and "|cFF00FF00" or "|cFFFFFF00"
-                        table.insert(progressLines, color .. obj.text .. "|r")
+                        table.insert(progressLines, obj.text)
                     end
                     navigationFrame.questProgress:SetText(table.concat(progressLines, "\n"))
                 end
@@ -654,28 +655,7 @@ function GuideNavigation:UpdateNavigation()
         if objectives and table.getn(objectives) > 0 then
             local progressLines = {}
             for _, obj in ipairs(objectives) do
-                local color
-                if obj.completed then
-                    color = "|cFF00FF00"
-                else
-                    -- Parse progress like "0/8" to determine color
-                    local current, total = string.match(obj.text, "(%d+)/(%d+)")
-                    if current and total then
-                        local pct = tonumber(current) / tonumber(total)
-                        if pct == 0 then
-                            color = "|cFFFF0000"
-                        elseif pct < 0.33 then
-                            color = "|cFFFF8000"
-                        elseif pct < 0.66 then
-                            color = "|cFFFFFF00"
-                        else
-                            color = "|cFF00FF00"
-                        end
-                    else
-                        color = "|cFFFFFFFF"
-                    end
-                end
-                table.insert(progressLines, color .. obj.text .. "|r")
+                table.insert(progressLines, obj.text)
             end
             navigationFrame.questProgress:SetText(table.concat(progressLines, "\n"))
         else

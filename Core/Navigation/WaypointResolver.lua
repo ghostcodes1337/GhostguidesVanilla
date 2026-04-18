@@ -121,33 +121,47 @@ function WaypointResolver:GetCurrentQuestAction(stepData)
         return nil, nil, nil, nil
     end
 
-    -- Collect all quest tags in order from the step
-    local questActions = {}
+    local currentGuideId = GLV.Settings:GetOption({"Guide", "CurrentGuide"}) or "Unknown"
+    local currentStepIndex = GLV.Settings:GetOption({"Guide", "Guides", currentGuideId, "CurrentStep"}) or 0
+    local displayToOriginal = GLV.CurrentDisplayToOriginal or {}
+    local origIdx = displayToOriginal[currentStepIndex]
+    local stepQuestState = GLV.Settings:GetOption({"Guide", "Guides", currentGuideId, "StepQuestState"}) or {}
 
-    -- First check step-level questTags (main source)
-    if stepData.questTags then
-        if GLV.Debug then
-            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[Nav]|r Found " .. table.getn(stepData.questTags) .. " step-level questTags")
-        end
-        for _, questTag in ipairs(stepData.questTags) do
-            if GLV.Debug then
-                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[Nav]|r  - Tag: " .. tostring(questTag.tag) .. " QuestId: " .. tostring(questTag.questId) .. " ObjIdx: " .. tostring(questTag.objectiveIndex))
-            end
-            table.insert(questActions, {
-                tag = questTag.tag,
-                questId = questTag.questId,
-                title = questTag.title,
-                objectiveIndex = questTag.objectiveIndex,
-                coords = stepData.coords
-            })
-        end
-    else
-        if GLV.Debug then
-            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[Nav]|r No step-level questTags")
-        end
+    local function buildNavActionKey(tag, questId, objectiveIndex)
+        return GLV.BuildActionKey({
+            tag = tag,
+            questId = tonumber(questId),
+            objectiveIndex = objectiveIndex
+        })
     end
 
-    -- Also check line-level questTags (fallback)
+    local function isActionMarkedDone(action)
+        if not origIdx or not stepQuestState[origIdx] then
+            return false
+        end
+        local actionKey = buildNavActionKey(action.tag, action.questId, action.objectiveIndex)
+        return stepQuestState[origIdx][actionKey] == true
+    end
+
+    local function isObjectiveDone(action)
+        if action.tag ~= "COMPLETE" or not action.objectiveIndex or not GLV.QuestTracker or not GLV.QuestTracker.GetQuestProgress then
+            return false
+        end
+
+        local objectives = GLV.QuestTracker:GetQuestProgress(action.questId)
+        if not objectives then
+            return false
+        end
+
+        local objective = objectives[action.objectiveIndex]
+        return objective and objective.completed == true
+    end
+
+    -- Collect all quest tags in order from the step
+    local questActions = {}
+    local seenActions = {}
+
+    -- First collect line-level quest tags so multi-action steps keep per-line coordinates.
     if stepData.lines then
         for lineIdx, line in ipairs(stepData.lines) do
             if line.questTags then
@@ -158,15 +172,46 @@ function WaypointResolver:GetCurrentQuestAction(stepData)
                     if GLV.Debug then
                         DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[Nav]|r  - Tag: " .. tostring(questTag.tag) .. " QuestId: " .. tostring(questTag.questId) .. " ObjIdx: " .. tostring(questTag.objectiveIndex))
                     end
-                    table.insert(questActions, {
-                        tag = questTag.tag,
-                        questId = questTag.questId,
-                        title = questTag.title,
-                        objectiveIndex = questTag.objectiveIndex,
-                        coords = line.coords
-                    })
+                    local actionKey = buildNavActionKey(questTag.tag, questTag.questId, questTag.objectiveIndex)
+                    if not seenActions[actionKey] then
+                        table.insert(questActions, {
+                            tag = questTag.tag,
+                            questId = questTag.questId,
+                            title = questTag.title,
+                            objectiveIndex = questTag.objectiveIndex,
+                            coords = line.coords
+                        })
+                        seenActions[actionKey] = true
+                    end
                 end
             end
+        end
+    end
+
+    -- Then add step-level quest tags only if no equivalent line-level action exists.
+    if stepData.questTags then
+        if GLV.Debug then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[Nav]|r Found " .. table.getn(stepData.questTags) .. " step-level questTags")
+        end
+        for _, questTag in ipairs(stepData.questTags) do
+            if GLV.Debug then
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[Nav]|r  - Tag: " .. tostring(questTag.tag) .. " QuestId: " .. tostring(questTag.questId) .. " ObjIdx: " .. tostring(questTag.objectiveIndex))
+            end
+            local actionKey = buildNavActionKey(questTag.tag, questTag.questId, questTag.objectiveIndex)
+            if not seenActions[actionKey] then
+                table.insert(questActions, {
+                    tag = questTag.tag,
+                    questId = questTag.questId,
+                    title = questTag.title,
+                    objectiveIndex = questTag.objectiveIndex,
+                    coords = stepData.coords
+                })
+                seenActions[actionKey] = true
+            end
+        end
+    else
+        if GLV.Debug then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[Nav]|r No step-level questTags")
         end
     end
 
@@ -176,29 +221,35 @@ function WaypointResolver:GetCurrentQuestAction(stepData)
 
     -- Find the first action that needs to be done
     for _, action in ipairs(questActions) do
-        local inLog, isComplete = self:GetQuestStatus(action.questId)
-
-        if GLV.Debug then
-            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[Nav]|r Checking " .. tostring(action.tag) .. " q" .. tostring(action.questId) .. " inLog=" .. tostring(inLog) .. " isComplete=" .. tostring(isComplete))
-        end
-
-        if action.tag == "TURNIN" then
-            -- QT: Need to turn in if quest is in log
-            if inLog then
-                return action, action.questId, "TURNIN", action.objectiveIndex
+        if isActionMarkedDone(action) or isObjectiveDone(action) then
+            if GLV.Debug then
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[Nav]|r Skipping done action " .. tostring(action.tag) .. " q" .. tostring(action.questId) .. " objIdx=" .. tostring(action.objectiveIndex))
             end
-        elseif action.tag == "ACCEPT" then
-            -- QA: Need to accept if quest is NOT in log
-            if not inLog then
-                return action, action.questId, "ACCEPT", action.objectiveIndex
+        else
+            local inLog, isComplete = self:GetQuestStatus(action.questId)
+
+            if GLV.Debug then
+                DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[Nav]|r Checking " .. tostring(action.tag) .. " q" .. tostring(action.questId) .. " inLog=" .. tostring(inLog) .. " isComplete=" .. tostring(isComplete))
             end
-        elseif action.tag == "COMPLETE" then
-            -- QC: Need to complete if quest is in log but not complete
-            if inLog and not isComplete then
-                if GLV.Debug then
-                    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[Nav]|r Returning COMPLETE for q" .. tostring(action.questId) .. " objIdx=" .. tostring(action.objectiveIndex))
+
+            if action.tag == "TURNIN" then
+                -- QT: Need to turn in if quest is in log
+                if inLog then
+                    return action, action.questId, "TURNIN", action.objectiveIndex
                 end
-                return action, action.questId, "COMPLETE", action.objectiveIndex
+            elseif action.tag == "ACCEPT" then
+                -- QA: Need to accept if quest is NOT in log
+                if not inLog then
+                    return action, action.questId, "ACCEPT", action.objectiveIndex
+                end
+            elseif action.tag == "COMPLETE" then
+                -- QC: Need to complete if quest is in log but not complete
+                if inLog and not isComplete then
+                    if GLV.Debug then
+                        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FFFF[Nav]|r Returning COMPLETE for q" .. tostring(action.questId) .. " objIdx=" .. tostring(action.objectiveIndex))
+                    end
+                    return action, action.questId, "COMPLETE", action.objectiveIndex
+                end
             end
         end
     end
@@ -622,51 +673,53 @@ local function collectOrderedWaypoints(stepData)
 end
 
 -- Find quest coordinates for objectives
-local function findQuestObjectiveCoordinates(stepData, playerPos, objectiveIndex)
+local function findQuestObjectiveCoordinates(stepData, playerPos, questId, objectiveIndex)
     if not stepData or not stepData.lines then
         return nil
     end
 
     for _, line in ipairs(stepData.lines) do
-        -- Get objectiveIndex from line's questTags if not provided
-        local lineObjectiveIndex = objectiveIndex
-        if not lineObjectiveIndex and line.questTags then
-            for _, questTag in ipairs(line.questTags) do
-                if questTag.objectiveIndex then
-                    lineObjectiveIndex = questTag.objectiveIndex
-                    break
-                end
-            end
-        end
-
-        if line.questId then
-            local questCoords = GLV:GetQuestAllCoords(line.questId, lineObjectiveIndex)
-            if questCoords and table.getn(questCoords) > 0 then
-                -- Find closest objective coordinate
-                local closestCoord = nil
-                local closestDistance = nil
-
-                for _, coord in ipairs(questCoords) do
-                    if coord.type == "objective" then
-                        local coordPos = {
-                            c = playerPos.c,
-                            x = coord.x / 100,
-                            y = coord.y / 100,
-                            z = coord.z
-                        }
-
-                        local distance = GLV.GuideNavigation:CalculateDistance(playerPos, coordPos)
-                        if not closestDistance or distance < closestDistance then
-                            closestDistance = distance
-                            closestCoord = coord
-                        end
+        if not questId or tonumber(line.questId) == tonumber(questId) then
+            -- Get objectiveIndex from line's questTags if not provided
+            local lineObjectiveIndex = objectiveIndex
+            if not lineObjectiveIndex and line.questTags then
+                for _, questTag in ipairs(line.questTags) do
+                    if questTag.objectiveIndex then
+                        lineObjectiveIndex = questTag.objectiveIndex
+                        break
                     end
                 end
+            end
 
-                if closestCoord then
-                    return closestCoord
-                else
-                    return WaypointResolver:FindCoordinatesByType(questCoords, WaypointResolver:GetStepType(stepData))
+            if line.questId then
+                local questCoords = GLV:GetQuestAllCoords(line.questId, lineObjectiveIndex)
+                if questCoords and table.getn(questCoords) > 0 then
+                    -- Find closest objective coordinate
+                    local closestCoord = nil
+                    local closestDistance = nil
+
+                    for _, coord in ipairs(questCoords) do
+                        if coord.type == "objective" then
+                            local coordPos = {
+                                c = playerPos.c,
+                                x = coord.x / 100,
+                                y = coord.y / 100,
+                                z = coord.z
+                            }
+
+                            local distance = GLV.GuideNavigation:CalculateDistance(playerPos, coordPos)
+                            if not closestDistance or distance < closestDistance then
+                                closestDistance = distance
+                                closestCoord = coord
+                            end
+                        end
+                    end
+
+                    if closestCoord then
+                        return closestCoord
+                    else
+                        return WaypointResolver:FindCoordinatesByType(questCoords, WaypointResolver:GetStepType(stepData))
+                    end
                 end
             end
         end
@@ -878,7 +931,7 @@ function WaypointResolver:ResolveWaypoints(stepData)
 
     -- Priority 7: Quest objective coordinates (for COMPLETE steps or fallback)
     if not targetCoords or stepType == "COMPLETE" then
-        local questCoords = findQuestObjectiveCoordinates(stepData, playerPos, currentObjectiveIndex)
+        local questCoords = findQuestObjectiveCoordinates(stepData, playerPos, currentQuestId, currentObjectiveIndex)
         if questCoords then
             targetCoords = questCoords
         end

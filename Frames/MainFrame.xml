@@ -11,16 +11,16 @@
             <Anchor point="CENTER"/>
         </Anchors>
 
-        <Backdrop bgFile="Interface\Tooltips\UI-Tooltip-Background" edgeFile="Interface\DialogFrame\UI-DialogBox-Border" tile="true">
+        <Backdrop bgFile="Interface\Tooltips\UI-Tooltip-Background" edgeFile="Interface\Tooltips\UI-Tooltip-Border" tile="true">
             <BackdropColor r="0.05" g="0.06" b="0.16" a="1"/>
             <EdgeSize>
                 <AbsValue val="16"/>
             </EdgeSize>
             <TileSize>
-                <AbsValue val="32"/>
+                <AbsValue val="16"/>
             </TileSize>
             <BackgroundInsets>
-                <AbsInset left="5" right="5" top="5" bottom="5"/>
+                <AbsInset left="4" right="4" top="4" bottom="4"/>
             </BackgroundInsets>
         </Backdrop>
 
@@ -165,7 +165,7 @@
 
             <ScrollFrame name="$parentScrollFrame" inherits="UIPanelScrollFrameTemplate">
                 <Size>
-                    <AbsDimension x="275" y="285"/>
+                    <AbsDimension x="275" y="140"/>
                 </Size>
                 <Anchors>
                     <Anchor point="TOPLEFT">
@@ -216,6 +216,9 @@
                 <NormalTexture file="Interface\Icons\INV_Misc_Note_01"/>
                 <PushedTexture file="Interface\Icons\INV_Misc_Note_01"/>
                 <Scripts>
+                    <OnLoad>
+                        this:SetFrameLevel(this:GetParent():GetFrameLevel() + 20)
+                    </OnLoad>
                     <OnClick>
                         if GLV and GLV.GuideEditor then
                             GLV.GuideEditor:Toggle()
@@ -244,6 +247,9 @@
                 <NormalTexture file="Interface\AddOns\GhostguidesVanilla\Textures\Settings"/>
                 <PushedTexture file="Interface\AddOns\GhostguidesVanilla\Textures\Settings"/>
                 <Scripts>
+                    <OnLoad>
+                        this:SetFrameLevel(this:GetParent():GetFrameLevel() + 20)
+                    </OnLoad>
                     <OnClick>GLV_ToggleSettings()</OnClick>
                 </Scripts>
             </Button>

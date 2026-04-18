@@ -7,6 +7,7 @@ Description:
 Talent suggestion system with level-up popup and talent frame highlighting
 ]]--
 
+local _G = _G or getfenv(0)
 local GLV = LibStub("GhostguidesVanilla")
 
 local TalentTracker = {}

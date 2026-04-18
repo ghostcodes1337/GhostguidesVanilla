@@ -35,6 +35,20 @@ local CONFIG = {
     titleFrame = GLV_MainLoadedGuideTitle
 }
 
+local function ensureSolidStepBackground(frame, color)
+    if not frame or not color then
+        return
+    end
+
+    if not frame.glvSolidBackground then
+        local bg = frame:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints(frame)
+        frame.glvSolidBackground = bg
+    end
+
+    frame.glvSolidBackground:SetTexture(color[1], color[2], color[3], color[4] or 1)
+end
+
 local GLV_QuestProgressWatcher = CreateFrame("Frame")
 GLV_QuestProgressWatcher:RegisterEvent("QUEST_LOG_UPDATE")
 
@@ -255,7 +269,15 @@ local function createTitle(guide)
 end
 
 -- Detect URLs in text, replace with colored [Link] placeholder, return URLs list
+local function normalizeGuideDisplayText(text)
+    text = text or ""
+    text = string.gsub(text, "\\n", "\n")
+    text = string.gsub(text, "\\\\", "\n")
+    return text
+end
+
 local function processURLs(text)
+    text = normalizeGuideDisplayText(text)
     local urls = {}
     local processed = string.gsub(text, "(https?://[%S]+)", function(url)
         -- Strip trailing punctuation that's likely not part of the URL
@@ -266,16 +288,99 @@ local function processURLs(text)
     return processed, urls
 end
 
+local function getCompleteQuestTagsFromLine(line)
+    local questTags = {}
+
+    if not line or not line.questTags then
+        return questTags
+    end
+
+    for _, questTag in ipairs(line.questTags) do
+        if questTag.tag == "COMPLETE" then
+            table.insert(questTags, questTag)
+        end
+    end
+
+    return questTags
+end
+
+local function appendQuestObjectivesToText(baseText, questTag)
+    if not questTag or not GLV.QuestTracker or not GLV.QuestTracker.GetQuestProgress then
+        return baseText
+    end
+
+    local questId = tonumber(questTag.questId)
+    if not questId then
+        return baseText
+    end
+
+    local objectives = GLV.QuestTracker:GetQuestProgress(questId)
+    if not objectives or table.getn(objectives) == 0 then
+        return baseText
+    end
+
+    if questTag.objectiveIndex then
+        local objective = objectives[questTag.objectiveIndex]
+        if objective and objective.text and objective.text ~= "" then
+            baseText = baseText .. "\n- " .. objective.text
+        end
+        return baseText
+    end
+
+    for _, objective in ipairs(objectives) do
+        if objective and objective.text and objective.text ~= "" then
+            baseText = baseText .. "\n- " .. objective.text
+        end
+    end
+
+    return baseText
+end
+
+local function isCompleteQuestTagFinished(questTag)
+    if not questTag or not GLV.QuestTracker then
+        return false
+    end
+
+    local questId = tonumber(questTag.questId)
+    if not questId then
+        return false
+    end
+
+    if GLV.QuestTracker.IsQuestCompleted and GLV.QuestTracker:IsQuestCompleted(questId) then
+        return true
+    end
+
+    if not GLV.QuestTracker.GetQuestProgress then
+        return false
+    end
+
+    local objectives = GLV.QuestTracker:GetQuestProgress(questId)
+    if not objectives or table.getn(objectives) == 0 then
+        return false
+    end
+
+    if questTag.objectiveIndex then
+        local objective = objectives[questTag.objectiveIndex]
+        return objective and objective.completed == true
+    end
+
+    for _, objective in ipairs(objectives) do
+        if objective and objective.completed ~= true then
+            return false
+        end
+    end
+
+    return true
+end
+
 -- Wrap text to fit within specified width and return wrapped text with line count and height
 local function wrapText(inputText, maxWidth, font, textScale)
     local wrappedText = ""
     local lineCount = 0
     local segments = {}
-    inputText = inputText or ""
+    inputText = normalizeGuideDisplayText(inputText or "")
     textScale = textScale or getGuideTextScale()
 
-    -- Convert \\ to newline
-    inputText = string.gsub(inputText, "\\\\", "\n")
     for segment in string.gfind(inputText, "([^\n]*)\n?") do
         if segment and segment ~= "" then table.insert(segments, segment) end
     end
@@ -506,10 +611,17 @@ local function calculateScrollPosition(stepIndex, scrollChild, guideId, spacing)
     return math.max(0, targetScroll)
 end
 
--- Scroll to specific step (positions it at top of visible area)
+-- Scroll to the step after the given one (positions the next step at top of visible area)
 local function scrollToStep(stepIndex, scrollChild, guideId, spacing)
     if stepIndex > 0 and GLV_MainScrollFrame then
-        local targetScroll = calculateScrollPosition(stepIndex, scrollChild, guideId, spacing)
+        local targetStepIndex = stepIndex + 1
+        local totalSteps = GLV.CurrentDisplayStepsCount or 0
+
+        if totalSteps > 0 and targetStepIndex > totalSteps then
+            targetStepIndex = stepIndex
+        end
+
+        local targetScroll = calculateScrollPosition(targetStepIndex, scrollChild, guideId, spacing)
         local maxScroll = GLV_MainScrollFrame:GetVerticalScrollRange()
         if maxScroll and maxScroll > 0 then
             targetScroll = math.min(targetScroll, maxScroll)
@@ -935,29 +1047,38 @@ function GLV:CreateGuideSteps(scrollChild, guide, guideId, callback)
 
             -- Update floating active step tracker
             local fullText = ""
+            local addedQuestProgress = {}
 
             for _, line in ipairs(step.lines) do
                 if line.text then
-                    fullText = fullText .. line.text
+                    local lineText = normalizeGuideDisplayText(line.text)
+                    local completeQuestTags = getCompleteQuestTagsFromLine(line)
+                    local hasFinishedCompleteQuest = false
 
-                    -- try to append live quest objective progress for any quest line
-                    if line.questId and GLV.QuestTracker and GLV.QuestTracker.GetQuestProgress then
-                        local objectives = GLV.QuestTracker:GetQuestProgress(line.questId)
+                    for _, questTag in ipairs(completeQuestTags) do
+                        if isCompleteQuestTagFinished(questTag) then
+                            hasFinishedCompleteQuest = true
+                            break
+                        end
+                    end
 
-                        if objectives and table.getn(objectives) > 0 then
-                            for _, obj in ipairs(objectives) do
-                                if obj.text and obj.text ~= "" then
-                                    fullText = fullText .. "\n- " .. obj.text
-                                end
-                            end
+                    if hasFinishedCompleteQuest then
+                        lineText = lineText .. " |cFF00FF00DONE|r"
+                    end
+
+                    fullText = fullText .. lineText
+
+                    for _, questTag in ipairs(completeQuestTags) do
+                        local progressKey = tostring(questTag.questId) .. ":" .. tostring(questTag.objectiveIndex or "all")
+                        if not addedQuestProgress[progressKey] then
+                            fullText = appendQuestObjectivesToText(fullText, questTag)
+                            addedQuestProgress[progressKey] = true
                         end
                     end
 
                     fullText = fullText .. "\n"
                 end
             end
-
-            GLV_UpdateStepTracker(fullText)
 
             GLV_UpdateStepTracker(fullText)
 
@@ -990,6 +1111,7 @@ function GLV:CreateGuideSteps(scrollChild, guide, guideId, callback)
             color = isEven(idx) and CONFIG.colors.even or CONFIG.colors.odd
         end
         frame:SetBackdropColor(unpack(color))
+        ensureSolidStepBackground(frame, color)
 
         -- simple white step header
         local stepHeaderText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -1013,19 +1135,10 @@ function GLV:CreateGuideSteps(scrollChild, guide, guideId, callback)
 
             local displayText, lineUrls = processURLs(line.text or "")
 
-            -- append quest objective progress directly under Complete Quest steps
-            if line.questId and string.find(line.text or "", "Complete Quest") then
-                local objectives = nil
-
-                if GLV.QuestTracker and GLV.QuestTracker.GetQuestProgress then
-                    objectives = GLV.QuestTracker:GetQuestProgress(line.questId)
-                end
-
-                if objectives and table.getn(objectives) > 0 then
-                    for _, obj in ipairs(objectives) do
-                        displayText = displayText .. "\n- " .. obj.text
-                    end
-                end
+            -- Append live quest objective progress directly under [QC] lines.
+            local completeQuestTags = getCompleteQuestTagsFromLine(line)
+            for _, questTag in ipairs(completeQuestTags) do
+                displayText = appendQuestObjectivesToText(displayText, questTag)
             end
 
             local wrappedText, lineCount, textHeight = wrapText(displayText, availableWidth)
@@ -1220,14 +1333,7 @@ function GLV:CreateGuideSteps(scrollChild, guide, guideId, callback)
                 GLV_MainScrollFrame:UpdateScrollChildRect()
                 -- Small delay to let the scroll range update
                 GLV.Ace:ScheduleEvent(function()
-                    local scrollTarget = activeStep + 1
-
-                    -- falls letzter step erreicht ist, beim aktiven bleiben
-                    if scrollTarget > totalSteps then
-                        scrollTarget = activeStep
-                    end
-
-                    scrollToStep(scrollTarget, scrollChild, guideId, CONFIG.spacing)
+                    scrollToStep(activeStep, scrollChild, guideId, CONFIG.spacing)
                     -- Update XP progress display after scroll (only affects active step)
                     GLV:UpdateXPProgressDisplay()
                     GLV.RefreshGuidePending = false
